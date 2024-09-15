@@ -1,6 +1,8 @@
 import cv2
 import os
 import time
+import shutil
+from datetime import datetime
 from utils import LoggerConfig
 from dotenv import load_dotenv
 
@@ -10,8 +12,10 @@ load_dotenv()
 # Get credentials from .env file
 rtsp_url = os.getenv('RTSP_URL')
 
-data_dir = 'output'
-os.makedirs(data_dir, exist_ok=True)
+active_dir = 'data\\active'
+to_upload_dir = 'data\\to_upload'
+os.makedirs(active_dir, exist_ok=True)
+os.makedirs(to_upload_dir, exist_ok=True)
 
 logger = LoggerConfig(name='frame_capture').get_logger()
 
@@ -23,45 +27,80 @@ def connect_camera(rtsp_url: str):
         return None
     return cap
 
-def capture_frames():
-    """Capture frames from the RTSP stream."""
-    cap = connect_camera(rtsp_url)
+def format_timestamp(timestamp):
+    """Format timestamp for filename."""
+    return timestamp.strftime('%Y%m%d%H%M%S')
 
+def stream_to_file(output_video_name='{}_{}.avi', fps=30, segment_duration=30):
+    """Stream the camera feed into segmented video files."""
+    cap = connect_camera(rtsp_url)
     if not cap:
         return
 
-    frame_count = 0
-    retry = 0
-    max_retry = 5
+    # Get the width and height from the first frame
+    ret, frame = cap.read()
+    if not ret:
+        logger.error("Failed to read frame from camera.")
+        cap.release()
+        return
+
+    height, width, _ = frame.shape
+
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    segment_start_time = time.time()
+    segment_index = 0
+
+    def get_segment_filename(start_time, end_time):
+        return os.path.join(active_dir, output_video_name.format(format_timestamp(start_time), format_timestamp(end_time), segment_index))
+
+    def update_segment_filename():
+        nonlocal segment_index
+        nonlocal segment_start_time
+        segment_end_time = datetime.fromtimestamp(time.time())
+        video.release()
+        segment_index += 1
+        segment_start_time = time.time()
+        segment_end_time = datetime.fromtimestamp(segment_start_time)
+        return get_segment_filename(segment_end_time, datetime.fromtimestamp(segment_start_time))
+
+    segment_start_dt = datetime.fromtimestamp(segment_start_time)
+    video = cv2.VideoWriter(get_segment_filename(segment_start_dt, segment_start_dt), fourcc, fps, (width, height))
+    logger.info(f"Streaming to file...")
+
     while True:
         ret, frame = cap.read()
         if not ret:
-            logger.error("Failed to read frame from camera. Retrying in 5s...")
-            retry += 1
+            logger.error("Failed to read frame from camera. Exiting...")
+            break
 
-            if retry == max_retry:
-                logger.critical('Failed to read frame from camera, max retries reached.')
-                logger.info('Sleeping for five minutes.')
-                time.sleep(5*60)
-                retry = 0
+        video.write(frame)
 
-            time.sleep(5)
-            cap = connect_camera(rtsp_url)
-            continue
+        current_time = time.time()
+        if current_time - segment_start_time >= segment_duration:
+            new_filename = update_segment_filename()
+            
 
-        img_path = os.path.join(data_dir, f'frame_{frame_count}.jpg')
-        cv2.imwrite(img_path, frame)
-
-        frame_count += 1
-        time.sleep(1)  # Adjust capture interval if needed
+            # Move files from active to to_upload
+            for filename in os.listdir(active_dir):
+                file_path = os.path.join(active_dir, filename)
+                if os.path.isfile(file_path):
+                    segment_end_dt = datetime.fromtimestamp(current_time)
+                    
+                    shutil.move(file_path, os.path.join(to_upload_dir, output_video_name.format(format_timestamp(segment_start_dt), format_timestamp(segment_end_dt), segment_index)))
+                    logger.info(f"Moved {filename} to {to_upload_dir}")
+                    
+            video = cv2.VideoWriter(new_filename, fourcc, fps, (width, height))
+            logger.info(f"Started new segment: {new_filename}")
 
     cap.release()
+    video.release()
+    logger.info("Video streaming finished.")
 
 if __name__ == "__main__":
     try:
-        logger.info('Starting Camera-Connect')
-        capture_frames()
+        logger.info('Starting Camera Stream')
+        stream_to_file()
     except Exception as e:
         logger.error(f"Error occurred: {e}")
     finally:
-        logger.info("Capture stopped.")
+        logger.info("Streaming stopped.")
