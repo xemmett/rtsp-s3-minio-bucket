@@ -8,7 +8,7 @@ echo "Starting frame capture and upload scripts at $(date)"
 
 # Start frame capture
 echo "Starting frame capture script..."
-python3 frame_capture.py &
+python3 capture_frames.py &
 
 # Start upload script
 echo "Starting upload frames script..."
