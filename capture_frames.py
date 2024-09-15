@@ -31,7 +31,7 @@ def format_timestamp(timestamp):
     """Format timestamp for filename."""
     return timestamp.strftime('%Y%m%d%H%M%S')
 
-def stream_to_file(output_video_name='{}_{}.avi', fps=30, segment_duration=30):
+def stream_to_file(output_video_name='{}_{}.avi', fps=30, segment_duration=5*60):
     """Stream the camera feed into segmented video files."""
     cap = connect_camera(rtsp_url)
     if not cap:

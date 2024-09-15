@@ -22,7 +22,7 @@ def upload_file(s3, bucket_name, file_path):
     s3.upload_file(file_path, bucket_name, os.path.basename(file_path))
     logger.info(f"Uploaded {file_path} to MinIO.")
 
-def upload_files(s3, bucket_name, upload_interval=30):
+def upload_files(s3, bucket_name, upload_interval=5*60):
     """Upload video files to MinIO every interval."""
     while True:
         time.sleep(upload_interval)
