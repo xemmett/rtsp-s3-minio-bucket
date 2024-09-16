@@ -17,7 +17,7 @@ to_upload_dir = os.path.join('data','to_upload')
 os.makedirs(active_dir, exist_ok=True)
 os.makedirs(to_upload_dir, exist_ok=True)
 
-logger = LoggerConfig(name='frame_capture').get_logger()
+logger = LoggerConfig(name='capture_frames').get_logger()
 
 def connect_camera(rtsp_url: str):
     """Connect to the RTSP camera feed."""
@@ -67,11 +67,25 @@ def stream_to_file(output_video_name='{}_{}.avi', fps=30, segment_duration=5*60)
     video = cv2.VideoWriter(get_segment_filename(segment_start_dt, segment_start_dt), fourcc, fps, (width, height))
     logger.info(f"Streaming to file...")
 
+    max_retries = 5
     while True:
         ret, frame = cap.read()
+        
         if not ret:
+            cap = None
+            retries = 0
+            
             logger.error("Failed to read frame from camera. Attempting Reconnect...")
-            cap = connect_camera(rtsp_url)
+            while(cap == None):
+                retries += 1
+                cap = connect_camera(rtsp_url)
+                time.sleep(5)
+                
+                if(retries == max_retries):
+                    logger.critical("Failed to reconnect to camera...")
+                    exit()
+                    
+            logger.info('Reconnected successfully!')
             continue
 
         video.write(frame)
