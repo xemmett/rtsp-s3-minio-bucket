@@ -1,21 +1,31 @@
 #!/bin/bash
 
-# Activate the virtual environment (if needed)
-# source venv/bin/activate
+# Continuous loop
+while true
+do
+    # Log start time
+    echo "Checking frame capture and upload scripts at $(date)"
 
-# Log start time
-echo "Starting frame capture and upload scripts at $(date)"
+    # Check if frame capture script is still running
+    if ps -p $frame_capture_pid > /dev/null 2>&1
+    then
+        echo "Frame capture script is still running"
+    else
+        echo "Frame capture script has finished or crashed, restarting..."
+        python3 capture_frames.py &
+        frame_capture_pid=$!
+    fi
 
-# Start frame capture
-echo "Starting frame capture script..."
-python3 capture_frames.py &
+    # Check if upload script is still running
+    if ps -p $upload_pid > /dev/null 2>&1
+    then
+        echo "Upload script is still running"
+    else
+        echo "Upload script has finished or crashed, restarting..."
+        python3 upload_frames.py &
+        upload_pid=$!
+    fi
 
-# Start upload script
-echo "Starting upload frames script..."
-python3 upload_frames.py &
-
-# Wait for both processes to end
-wait
-
-# Log end time
-echo "Both scripts finished running at $(date)"
+    # Wait 10 minutes before checking again
+    sleep 600
+done

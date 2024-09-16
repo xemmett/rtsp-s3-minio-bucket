@@ -1,121 +1,86 @@
 import cv2
 import os
-import time
 import shutil
-from datetime import datetime
-from utils import LoggerConfig
+import time
+import datetime
 from dotenv import load_dotenv
+from utils import LoggerConfig
+
+# Set up logging
+logger = LoggerConfig(name='Capture Frames').get_logger()
 
 # Load environment variables from .env file
 load_dotenv()
 
-# Get credentials from .env file
-rtsp_url = os.getenv('RTSP_URL')
+# Get the RTSP URL from environment variables
+RTSP_URL = os.getenv('RTSP_URL')
 
-active_dir = os.path.join('data','active')
-to_upload_dir = os.path.join('data','to_upload')
-os.makedirs(active_dir, exist_ok=True)
-os.makedirs(to_upload_dir, exist_ok=True)
+# Directory paths
+ACTIVE_DIR = os.path.join('data', 'active')
+UPLOAD_DIR = os.path.join('data', 'to_upload')
 
-logger = LoggerConfig(name='capture_frames').get_logger()
 
-def connect_camera(rtsp_url: str):
-    """Connect to the RTSP camera feed."""
-    cap = cv2.VideoCapture(rtsp_url)
+# Ensure directories exist
+os.makedirs(ACTIVE_DIR, exist_ok=True)
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+def get_current_time():
+    return datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+
+def start_stream():
+    cap = cv2.VideoCapture(RTSP_URL)
     if not cap.isOpened():
-        logger.error("Failed to open camera feed.")
-        return None
+        logger.critical("Failed to open RTSP stream.")
+        raise Exception("Failed to open RTSP stream.")
+    logger.info("RTSP stream opened successfully.")
     return cap
 
-def format_timestamp(timestamp):
-    """Format timestamp for filename."""
-    return timestamp.strftime('%Y%m%d%H%M%S')
-
-def stream_to_file(output_video_name='{}_{}.avi', fps=30, segment_duration=5*60):
-    """Stream the camera feed into segmented video files."""
-    cap = connect_camera(rtsp_url)
-    if not cap:
-        return
-
-    # Get the width and height from the first frame
-    ret, frame = cap.read()
-    if not ret:
-        logger.error("Failed to read frame from camera.")
-        cap.release()
-        return
-
-    height, width, _ = frame.shape
-
+def process_stream(cap):
+    current_file = os.path.join(ACTIVE_DIR, f"video_{get_current_time()}.avi")
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    segment_start_time = time.time()
-    segment_index = 0
+    out = cv2.VideoWriter(current_file, fourcc, 20.0, (int(cap.get(3)), int(cap.get(4))))
 
-    def get_segment_filename(start_time, end_time):
-        return os.path.join(active_dir, output_video_name.format(format_timestamp(start_time), format_timestamp(end_time), segment_index))
+    logger.info(f"Started recording to file: {current_file}")
+    return cap, out, current_file
 
-    def update_segment_filename():
-        nonlocal segment_index
-        nonlocal segment_start_time
-        segment_end_time = datetime.fromtimestamp(time.time())
-        video.release()
-        segment_index += 1
-        segment_start_time = time.time()
-        segment_end_time = datetime.fromtimestamp(segment_start_time)
-        return get_segment_filename(segment_end_time, datetime.fromtimestamp(segment_start_time))
+def main():
+    stream_cap = None
+    video_writer = None
+    active_file = None
+    last_transfer_time = time.time()
 
-    segment_start_dt = datetime.fromtimestamp(segment_start_time)
-    video = cv2.VideoWriter(get_segment_filename(segment_start_dt, segment_start_dt), fourcc, fps, (width, height))
-    logger.info(f"Streaming to file...")
-
-    max_retries = 5
     while True:
-        ret, frame = cap.read()
-        
+        if stream_cap is None or not stream_cap.isOpened():
+            logger.info("Starting a new stream...")
+            try:
+                stream_cap = start_stream()
+                stream_cap, video_writer, active_file = process_stream(stream_cap)
+            except Exception as e:
+                logger.error(f"Error starting stream: {e}")
+                time.sleep(5)  # Wait before retrying
+                continue
+
+        ret, frame = stream_cap.read()
         if not ret:
-            cap = None
-            retries = 0
-            
-            logger.error("Failed to read frame from camera. Attempting Reconnect...")
-            while(cap == None):
-                retries += 1
-                cap = connect_camera(rtsp_url)
-                time.sleep(5)
-                
-                if(retries == max_retries):
-                    logger.critical("Failed to reconnect to camera...")
-                    exit()
-                    
-            logger.info('Reconnected successfully!')
+            logger.warning("Stream read failed, restarting...")
+            stream_cap.release()
+            video_writer.release()
+            time.sleep(5)  # Wait before retrying
             continue
 
-        video.write(frame)
+        video_writer.write(frame)
 
+        # Check if it's time to switch files
         current_time = time.time()
-        if current_time - segment_start_time >= segment_duration:
-            new_filename = update_segment_filename()
-            
+        if current_time - last_transfer_time >= 300:
+            video_writer.release()
+            shutil.move(active_file, UPLOAD_DIR)
+            logger.info(f"Moved file to upload directory: {active_file}")
 
-            # Move files from active to to_upload
-            for filename in os.listdir(active_dir):
-                file_path = os.path.join(active_dir, filename)
-                if os.path.isfile(file_path):
-                    segment_end_dt = datetime.fromtimestamp(current_time)
-                    
-                    shutil.move(file_path, os.path.join(to_upload_dir, output_video_name.format(format_timestamp(segment_start_dt), format_timestamp(segment_end_dt), segment_index)))
-                    logger.info(f"Moved {filename} to {to_upload_dir}")
-                    
-            video = cv2.VideoWriter(new_filename, fourcc, fps, (width, height))
-            logger.info(f"Started new segment: {new_filename}")
-
-    cap.release()
-    video.release()
-    logger.info("Video streaming finished.")
+            # Restart video writer
+            active_file = os.path.join(ACTIVE_DIR, f"video_{get_current_time()}.avi")
+            video_writer = cv2.VideoWriter(active_file, cv2.VideoWriter_fourcc(*'XVID'), 20.0, (int(stream_cap.get(3)), int(stream_cap.get(4))))
+            last_transfer_time = current_time
 
 if __name__ == "__main__":
-    try:
-        logger.info('Starting Camera Stream')
-        stream_to_file()
-    except Exception as e:
-        logger.error(f"Error occurred: {e}")
-    finally:
-        logger.info("Streaming stopped.")
+    main()

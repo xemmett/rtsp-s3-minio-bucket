@@ -1,27 +1,27 @@
 #!/bin/bash
 
-# Prompt user for network settings
-echo "Enter your wireless network name:"
-read -r NETWORK_NAME
+# Prompt for network credentials
+read -p "Enter the SSID of the network: " SSID
+read -sp "Enter the password for the network: " PASSWORD
+echo
 
-echo "Enter your wireless network password:"
-read -r NETWORK_PASSWORD
+# Backup the current wpa_supplicant.conf file
+cp /etc/wpa_supplicant/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf.backup
 
-# Configure wireless interface
-sudo nano /etc/network/interfaces
+# Write new network configuration to wpa_supplicant.conf
+cat <<EOF > /etc/wpa_supplicant/wpa_supplicant.conf
+country=IE
+update_config=1
+ctrl_interface=/var/run/wpa_supplicant
 
-# Add or edit the following lines to enable wireless networking on wlan0
-cat <<EOF >>/etc/network/interfaces
-auto wlan0
-iface wlan0 inet dhcp
-wpa-ssid "$NETWORK_NAME"
-wpa-psk "$NETWORK_PASSWORD"
+network={
+    ssid="$SSID"
+    psk="$PASSWORD"
+    key_mgmt=WPA-PSK
+}
 EOF
 
-# Save and apply changes
-echo "Press Enter to save changes..."
-read -r
+# Restart the networking service to apply changes
+sudo systemctl restart dhcpcd
 
-sudo service networking restart
-
-echo "Wireless interface configured. Please verify connection."
+echo "Network configuration updated. Please reconnect to the Raspberry Pi if needed."
