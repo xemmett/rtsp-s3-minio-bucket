@@ -70,8 +70,9 @@ def stream_to_file(output_video_name='{}_{}.avi', fps=30, segment_duration=5*60)
     while True:
         ret, frame = cap.read()
         if not ret:
-            logger.error("Failed to read frame from camera. Exiting...")
-            break
+            logger.error("Failed to read frame from camera. Attempting Reconnect...")
+            cap = connect_camera(rtsp_url)
+            continue
 
         video.write(frame)
 
