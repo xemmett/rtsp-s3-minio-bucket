@@ -9,8 +9,8 @@ cd "$(pwd)"
 # pip install -r requirements.txt
 
 # Start two background processes using nohup to keep them running after the terminal is closed
-nohup python3 capture_frames.py &
-nohup python3 upload_frames.py &
+python3 capture_frames.py &
+python3 upload_frames.py &
 
 # Wait for both processes to finish before exiting
 wait
