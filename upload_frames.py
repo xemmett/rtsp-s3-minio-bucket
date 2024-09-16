@@ -41,6 +41,7 @@ def upload_files(files):
             logger.info(f"Uploading {file_name} to S3 bucket.")
             s3_client.upload_file(file_path, S3_BUCKET_NAME, file_name)
             logger.info(f"Successfully uploaded {file_name} to S3 bucket.")
+            os.remove(file_path)
         except FileNotFoundError:
             logger.error(f"File {file_name} not found.")
         except NoCredentialsError:

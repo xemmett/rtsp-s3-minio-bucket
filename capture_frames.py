@@ -120,7 +120,7 @@ while True:
 
     cv2.putText(frame, text, (10, 35), font, 0.75, (255, 255, 255), 2, cv2.LINE_AA)
     frame_delta = cv2.cvtColor(frame_delta, cv2.COLOR_GRAY2BGR)
-    cv2.imshow("frame", np.hstack((frame_delta, frame)))
+    # cv2.imshow("frame", np.hstack((frame_delta, frame))) # add to view what motion viewer sees.
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break

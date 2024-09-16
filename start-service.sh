@@ -1,31 +1,14 @@
 #!/bin/bash
 
-# Continuous loop
-while true
-do
-    # Log start time
-    echo "Checking frame capture and upload scripts at $(date)"
+# Change directory to the specified location
+cd "~/camera-connect"
 
-    # Check if frame capture script is still running
-    if ps -p $frame_capture_pid > /dev/null 2>&1
-    then
-        echo "Frame capture script is still running"
-    else
-        echo "Frame capture script has finished or crashed, restarting..."
-        python3 capture_frames.py &
-        frame_capture_pid=$!
-    fi
+# Install requirements from requirements.txt using Python 3
+python3 -m pip install -r requirements.txt
 
-    # Check if upload script is still running
-    if ps -p $upload_pid > /dev/null 2>&1
-    then
-        echo "Upload script is still running"
-    else
-        echo "Upload script has finished or crashed, restarting..."
-        python3 upload_frames.py &
-        upload_pid=$!
-    fi
+# Start two background processes using nohup to keep them running after the terminal is closed
+nohup python3 capture_frames.py &
+nohup python3 upload_frames.py &
 
-    # Wait 10 minutes before checking again
-    sleep 600
-done
+# Wait for both processes to finish before exiting
+wait
