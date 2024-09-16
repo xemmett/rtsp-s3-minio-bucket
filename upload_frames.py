@@ -20,9 +20,9 @@ logger = LoggerConfig(name='upload_frames').get_logger()
 def upload_file(s3, bucket_name, file_path):
     """Upload a file to MinIO."""
     s3.upload_file(file_path, bucket_name, os.path.basename(file_path))
-    logger.info(f"Uploaded {file_path} to MinIO.")
+    logger.info(f"Uploaded {file_path} to MinIO!")
 
-def upload_files(s3, bucket_name, upload_interval=5*60):
+def upload_files(s3, bucket_name, upload_interval=5):
     """Upload video files to MinIO every interval."""
     while True:
         time.sleep(upload_interval)
@@ -30,6 +30,7 @@ def upload_files(s3, bucket_name, upload_interval=5*60):
         files_to_upload = [f for f in os.listdir(to_upload_dir) if f.endswith('.avi')]
         for file in files_to_upload:
             file_path = os.path.join(to_upload_dir, file)
+            logger.info(f"Uploading {file_path} to MinIO.")
             upload_file(s3, bucket_name, file_path)
             os.remove(file_path)  # Remove the file after uploading
 
