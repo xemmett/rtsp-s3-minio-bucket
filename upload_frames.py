@@ -14,7 +14,7 @@ minio_access_key = os.getenv('MINIO_ACCESS_KEY')
 minio_secret_key = os.getenv('MINIO_SECRET_KEY')
 minio_region_name = os.getenv('MINIO_REGION_NAME')
 
-to_upload_dir = 'data/to_upload'
+to_upload_dir = os.path.join('data', 'to_upload')
 logger = LoggerConfig(name='upload_frames').get_logger()
 
 def upload_file(s3, bucket_name, file_path):
