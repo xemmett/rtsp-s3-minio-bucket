@@ -13,8 +13,8 @@ echo "Updating wpa_supplicant configuration..."
 echo -e "country=IE\nupdate_config=1\nctrl_interface=/var/run/wpa_supplicant\n\nnetwork={\n    ssid=\"$SSID\"\n    psk=\"$PASSWORD\"\n    key_mgmt=WPA-PSK\n}\n" | sudo tee /etc/wpa_supplicant/wpa_supplicant.conf > /dev/null
 
 # Restart the networking service to apply changes
-if sudo systemctl restart dhcpcd; then
+if sudo systemctl restart wpa_supplicant; then
     echo "Network configuration updated. Please reconnect to the Raspberry Pi if needed."
 else
-    echo "Failed to restart dhcpcd.service. Please manually restart the networking service."
+    echo "Failed to restart wpa_supplicant. Please manually restart the networking service."
 fi
