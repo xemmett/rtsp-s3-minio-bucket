@@ -12,8 +12,8 @@ load_dotenv()
 # Get credentials from .env file
 rtsp_url = os.getenv('RTSP_URL')
 
-active_dir = 'data\\active'
-to_upload_dir = 'data\\to_upload'
+active_dir = os.path.join('data','active')
+to_upload_dir = os.path.join('data','to_upload')
 os.makedirs(active_dir, exist_ok=True)
 os.makedirs(to_upload_dir, exist_ok=True)
 
