@@ -31,34 +31,39 @@ s3_client_args = {
 if S3_ENDPOINT_URL:
     s3_client_args['endpoint_url'] = S3_ENDPOINT_URL
 
-s3_client = boto3.client('s3', **s3_client_args)
 
-def upload_file(file_path):
-    file_name = os.path.basename(file_path)
-    try:
-        s3_client.upload_file(file_path, S3_BUCKET_NAME, file_name)
-        logger.info(f"Successfully uploaded {file_name} to S3 bucket.")
-    except FileNotFoundError:
-        logger.error(f"File {file_name} not found.")
-    except NoCredentialsError:
-        logger.critical("AWS credentials not found.")
-    except PartialCredentialsError:
-        logger.critical("Incomplete AWS credentials.")
-    except ClientError as e:
-        logger.error(f"Client error occurred: {e}")
-    except Exception as e:
-        logger.error(f"An unexpected error occurred: {e}")
+def upload_files(files):
+    s3_client = boto3.client('s3', **s3_client_args)
+
+    for file_path in files:
+        file_name = os.path.basename(file_path)
+        try:
+            logger.info(f"Uploading {file_name} to S3 bucket.")
+            s3_client.upload_file(file_path, S3_BUCKET_NAME, file_name)
+            logger.info(f"Successfully uploaded {file_name} to S3 bucket.")
+        except FileNotFoundError:
+            logger.error(f"File {file_name} not found.")
+        except NoCredentialsError:
+            logger.critical("AWS credentials not found.")
+        except PartialCredentialsError:
+            logger.critical("Incomplete AWS credentials.")
+        except ClientError as e:
+            logger.error(f"Client error occurred: {e}")
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {e}")
+
+    s3_client.close()
 
 def main():
+    time.sleep(15)
     while True:
         files = [os.path.join(UPLOAD_DIR, f) for f in os.listdir(UPLOAD_DIR) if os.path.isfile(os.path.join(UPLOAD_DIR, f))]
         if not files:
             logger.info("No files to upload. Sleeping for 5 minutes...")
-            time.sleep(300)  # Sleep for 5 minutes if no files are present
+            time.sleep(1*60)  # Sleep for 5 minutes if no files are present
             continue
 
-        for file_path in files:
-            upload_file(file_path)
+        upload_files(files)
 
         logger.info("All files uploaded. Sleeping for 5 minutes...")
         time.sleep(300)  # Sleep for 5 minutes after uploading all files

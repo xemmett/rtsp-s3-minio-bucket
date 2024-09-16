@@ -1,86 +1,135 @@
-import cv2
 import os
-import shutil
-import time
-import datetime
+import cv2
+import numpy as np
+import imutils
+from datetime import datetime
 from dotenv import load_dotenv
 from utils import LoggerConfig
+import shutil
+import time
+
+# =============================================================================
+# USER-SET PARAMETERS
+# =============================================================================
+
+FRAMES_TO_PERSIST = 10
+MIN_SIZE_FOR_MOVEMENT = 2000
+MOVEMENT_DETECTED_PERSISTENCE = 100
+VIDEO_OUTPUT_DIR = 'data/active'
+UPLOAD_DIR = 'data/to_upload'
+TEMP_DIR = 'data/temp'
+
+# =============================================================================
+# CORE PROGRAM
+# =============================================================================
 
 # Set up logging
 logger = LoggerConfig(name='Capture Frames').get_logger()
 
-# Load environment variables from .env file
+# Load environment variables
 load_dotenv()
-
-# Get the RTSP URL from environment variables
 RTSP_URL = os.getenv('RTSP_URL')
 
-# Directory paths
-ACTIVE_DIR = os.path.join('data', 'active')
-UPLOAD_DIR = os.path.join('data', 'to_upload')
+# Create capture object
+cap = cv2.VideoCapture(RTSP_URL)
+if not cap.isOpened():
+    logger.error("Unable to open video stream")
+    exit()
 
+first_frame = None
+next_frame = None
+font = cv2.FONT_HERSHEY_SIMPLEX
+delay_counter = 0
+movement_persistent_counter = 0
+recording = False
+video_writer = None
+output_filename = None
 
-# Ensure directories exist
-os.makedirs(ACTIVE_DIR, exist_ok=True)
+# Ensure output directories exist
+os.makedirs(VIDEO_OUTPUT_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(TEMP_DIR, exist_ok=True)
 
-def get_current_time():
-    return datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+while True:
+    transient_movement_flag = False
+    ret, frame = cap.read()
 
-def start_stream():
-    cap = cv2.VideoCapture(RTSP_URL)
-    if not cap.isOpened():
-        logger.critical("Failed to open RTSP stream.")
-        raise Exception("Failed to open RTSP stream.")
-    logger.info("RTSP stream opened successfully.")
-    return cap
+    if not ret:
+        logger.error("Error capturing frame")
+        continue
 
-def process_stream(cap):
-    current_file = os.path.join(ACTIVE_DIR, f"video_{get_current_time()}.avi")
-    fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    out = cv2.VideoWriter(current_file, fourcc, 20.0, (int(cap.get(3)), int(cap.get(4))))
+    frame = imutils.resize(frame, width=750)
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    gray = cv2.GaussianBlur(gray, (21, 21), 0)
 
-    logger.info(f"Started recording to file: {current_file}")
-    return cap, out, current_file
+    if first_frame is None:
+        first_frame = gray
 
-def main():
-    stream_cap = None
-    video_writer = None
-    active_file = None
-    last_transfer_time = time.time()
+    delay_counter += 1
+    if delay_counter > FRAMES_TO_PERSIST:
+        delay_counter = 0
+        first_frame = next_frame
 
-    while True:
-        if stream_cap is None or not stream_cap.isOpened():
-            logger.info("Starting a new stream...")
-            try:
-                stream_cap = start_stream()
-                stream_cap, video_writer, active_file = process_stream(stream_cap)
-            except Exception as e:
-                logger.error(f"Error starting stream: {e}")
-                time.sleep(5)  # Wait before retrying
-                continue
+    next_frame = gray
+    frame_delta = cv2.absdiff(first_frame, next_frame)
+    thresh = cv2.threshold(frame_delta, 25, 255, cv2.THRESH_BINARY)[1]
+    thresh = cv2.dilate(thresh, None, iterations=2)
+    cnts, _ = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        ret, frame = stream_cap.read()
-        if not ret:
-            logger.warning("Stream read failed, restarting...")
-            stream_cap.release()
-            video_writer.release()
-            time.sleep(5)  # Wait before retrying
-            continue
+    for c in cnts:
+        (x, y, w, h) = cv2.boundingRect(c)
+        if cv2.contourArea(c) > MIN_SIZE_FOR_MOVEMENT:
+            transient_movement_flag = True
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
+    if transient_movement_flag:
+        movement_persistent_flag = True
+        movement_persistent_counter = MOVEMENT_DETECTED_PERSISTENCE
+        if not recording:
+            # Start recording with proper error handling
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            output_filename = os.path.join(TEMP_DIR, f"{timestamp}.avi")
+            
+            # Try different codecs
+            fourcc = cv2.VideoWriter_fourcc(*'XVID')  # Use MJPG or H264
+            video_writer = cv2.VideoWriter(output_filename, fourcc, 20.0, (frame.shape[1], frame.shape[0]))
+            
+            # Ensure the VideoWriter is opened properly
+            if not video_writer.isOpened():
+                logger.error(f"Failed to open VideoWriter for {output_filename}")
+                recording = False
+            else:
+                recording = True
+                logger.info(f"Started recording: {output_filename}")
+    
+    if recording:
         video_writer.write(frame)
 
-        # Check if it's time to switch files
-        current_time = time.time()
-        if current_time - last_transfer_time >= 300:
+    if movement_persistent_counter > 0:
+        text = f"Movement Detected {movement_persistent_counter}"
+        movement_persistent_counter -= 1
+    else:
+        text = "No Movement Detected"
+        if recording:
             video_writer.release()
-            shutil.move(active_file, UPLOAD_DIR)
-            logger.info(f"Moved file to upload directory: {active_file}")
+            # Finalize the video file before moving it
+            time.sleep(1)
+            shutil.move(output_filename, os.path.join(UPLOAD_DIR, os.path.basename(output_filename)))
+            logger.info(f"Recording stopped and file moved: {output_filename}")
+            recording = False
 
-            # Restart video writer
-            active_file = os.path.join(ACTIVE_DIR, f"video_{get_current_time()}.avi")
-            video_writer = cv2.VideoWriter(active_file, cv2.VideoWriter_fourcc(*'XVID'), 20.0, (int(stream_cap.get(3)), int(stream_cap.get(4))))
-            last_transfer_time = current_time
+    cv2.putText(frame, text, (10, 35), font, 0.75, (255, 255, 255), 2, cv2.LINE_AA)
+    frame_delta = cv2.cvtColor(frame_delta, cv2.COLOR_GRAY2BGR)
+    cv2.imshow("frame", np.hstack((frame_delta, frame)))
 
-if __name__ == "__main__":
-    main()
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+# Final cleanup
+if recording and video_writer:
+    video_writer.release()
+    time.sleep(1)
+    shutil.move(output_filename, os.path.join(UPLOAD_DIR, os.path.basename(output_filename)))
+
+cap.release()
+cv2.destroyAllWindows()
