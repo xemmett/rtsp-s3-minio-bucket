@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # Change directory to the current location
-cd "~/camera-connect/"
+cd "$(pwd)"
 
 # Install requirements from requirements.txt using Python 3 in an unmanaged virtual environment
 # python3 -m venv env
 # source env/bin/activate
-pip install -r requirements.txt
+# pip install -r requirements.txt
 
 # Start two background processes using nohup to keep them running after the terminal is closed
 nohup python3 capture_frames.py &

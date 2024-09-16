@@ -80,7 +80,7 @@ while True:
         (x, y, w, h) = cv2.boundingRect(c)
         if cv2.contourArea(c) > MIN_SIZE_FOR_MOVEMENT:
             transient_movement_flag = True
-            # cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            # cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2) # draw rectange
 
     if transient_movement_flag:
         movement_persistent_flag = True
