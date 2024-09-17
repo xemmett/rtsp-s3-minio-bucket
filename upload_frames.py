@@ -61,7 +61,7 @@ def main():
         files = [os.path.join(UPLOAD_DIR, f) for f in os.listdir(UPLOAD_DIR) if os.path.isfile(os.path.join(UPLOAD_DIR, f))]
         if not files:
             logger.info("No files to upload. Sleeping for 5 minutes...")
-            time.sleep(1*60)  # Sleep for 5 minutes if no files are present
+            time.sleep(5*60)  # Sleep for 5 minutes if no files are present
             continue
 
         upload_files(files)
