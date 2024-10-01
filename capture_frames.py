@@ -28,7 +28,8 @@ logger = LoggerConfig(name='Capture Frames').get_logger()
 
 # Load environment variables
 load_dotenv()
-RTSP_URL = os.getenv('RTSP_URL')
+RTSP_URL = 0 # For usb cam
+# RTSP_URL = os.getenv('RTSP_URL') # for ip cam
 
 # Create a function to attempt reconnection
 def connect_to_stream(rtsp_url, retries=5, delay=5):
@@ -137,12 +138,12 @@ while True:
     # ADDITIONAL DEBUG CODE TO VIEW VIDEO
     # =============================================================================
 
-    # cv2.putText(frame, text, (10, 35), font, 0.75, (255, 255, 255), 2, cv2.LINE_AA)
-    # frame_delta = cv2.cvtColor(frame_delta, cv2.COLOR_GRAY2BGR)
-    # cv2.imshow("frame", np.hstack((frame_delta, frame))) # add to view what motion viewer sees.
+    cv2.putText(frame, text, (10, 35), font, 0.75, (255, 255, 255), 2, cv2.LINE_AA)
+    frame_delta = cv2.cvtColor(frame_delta, cv2.COLOR_GRAY2BGR)
+    cv2.imshow("frame", np.hstack((frame_delta, frame))) # add to view what motion viewer sees.
 
-    # if cv2.waitKey(1) & 0xFF == ord('q'):
-    #     break
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
 # Final cleanup
 if recording and video_writer:
