@@ -30,11 +30,25 @@ logger = LoggerConfig(name='Capture Frames').get_logger()
 load_dotenv()
 RTSP_URL = os.getenv('RTSP_URL')
 
-# Create capture object
-cap = cv2.VideoCapture(RTSP_URL)
-if not cap.isOpened():
-    logger.error("Unable to open video stream")
-    exit()
+# Create a function to attempt reconnection
+def connect_to_stream(rtsp_url, retries=5, delay=5):
+    attempt = 0
+    while True:
+        cap = cv2.VideoCapture(rtsp_url)
+        if cap.isOpened():
+            logger.info(f"Connected to video stream after {attempt} attempts.")
+            return cap
+        else:
+            attempt += 1
+            logger.error(f"Attempt {attempt}: Unable to open video stream. Retrying in {delay} seconds...")
+            time.sleep(delay)
+
+# Attempt to connect to the stream (infinite retry loop)
+cap = connect_to_stream(RTSP_URL)
+
+# =============================================================================
+# ADDITIONAL CODE TO PROCESS VIDEO
+# =============================================================================
 
 first_frame = None
 next_frame = None
@@ -56,6 +70,7 @@ while True:
 
     if not ret:
         logger.error("Error capturing frame")
+        connect_to_stream(RTSP_URL)
         continue
 
     frame = imutils.resize(frame, width=750)
@@ -118,12 +133,16 @@ while True:
             logger.info(f"Recording stopped and file moved: {output_filename}")
             recording = False
 
-    cv2.putText(frame, text, (10, 35), font, 0.75, (255, 255, 255), 2, cv2.LINE_AA)
-    frame_delta = cv2.cvtColor(frame_delta, cv2.COLOR_GRAY2BGR)
-    cv2.imshow("frame", np.hstack((frame_delta, frame))) # add to view what motion viewer sees.
+    # =============================================================================
+    # ADDITIONAL DEBUG CODE TO VIEW VIDEO
+    # =============================================================================
 
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+    # cv2.putText(frame, text, (10, 35), font, 0.75, (255, 255, 255), 2, cv2.LINE_AA)
+    # frame_delta = cv2.cvtColor(frame_delta, cv2.COLOR_GRAY2BGR)
+    # cv2.imshow("frame", np.hstack((frame_delta, frame))) # add to view what motion viewer sees.
+
+    # if cv2.waitKey(1) & 0xFF == ord('q'):
+    #     break
 
 # Final cleanup
 if recording and video_writer:
